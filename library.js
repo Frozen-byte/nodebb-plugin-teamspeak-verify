@@ -5,7 +5,7 @@ var user = require.main.require("./src/user"),
     meta = require.main.require('./src/meta'),
     winston = require('winston'),
     TeamSpeakClient = require('node-teamspeak'),
-    loggedIn = require.main.require('connect-ensure-login');
+    middleware = require.main.require('./src/middleware');
 
 var plugin = {};
 
@@ -100,10 +100,10 @@ plugin.init = function (data, callback) {
     data.router.get('/api/admin/plugins/teamspeak-verify', render);
 
 
-    data.router.get('/api/plugins/teamspeak-verify/generate', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
-    data.router.post('/api/plugins/teamspeak-verify/generate', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -143,11 +143,11 @@ plugin.init = function (data, callback) {
         });
     });
 
-    data.router.get('/api/plugins/teamspeak-verify/check', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
 
-    data.router.post('/api/plugins/teamspeak-verify/check', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -182,11 +182,11 @@ plugin.init = function (data, callback) {
         });
     });
 
-    data.router.get('/api/plugins/teamspeak-verify/checkUser', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
 
-    data.router.post('/api/plugins/teamspeak-verify/checkUser', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
         plugin.getTSIDs(function (err, data) {
             if (data.indexOf(req.body.tsid) >= 0) {
                 res.json({error: true, info: "TS ID already verified"});
@@ -204,11 +204,11 @@ plugin.init = function (data, callback) {
         });
     });
 
-    data.router.get('/api/plugins/teamspeak-verify/disassociate/:uid', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/disassociate/:uid', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
 
-    data.router.post('/api/plugins/teamspeak-verify/disassociate', loggedIn.ensureLoggedIn(), function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/disassociate', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
