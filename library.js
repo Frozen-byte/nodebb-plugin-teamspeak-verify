@@ -25,18 +25,21 @@ plugin.sentMessage = function (tsid, msg) {
     if (cl !== undefined) {
         plugin.connect(function () {
             cl.send("clientgetids", {cluid: tsid}, function (err, response, rawResponse) {
+                let clid;
+
+                if(Array.isArray(response)) {
+                    clid = response[0].clid;
+                    log.warn(`found multiple clients for identity, messaging client ${response[0].name} (${clid})`);
+                } else {
+                    clid = response.clid;
+                }
+
                 if (response === undefined) {
                     log.warn("Client not found");
                 } else {
-                    console.debug({
-                        rawResponse,
-                        response,
-                        msg,
-                        tsid
-                    });
                     cl.send("sendtextmessage", {
                         targetmode: 1,
-                        target: response.clid,
+                        target: clid,
                         msg: msg
                     });
                 }
