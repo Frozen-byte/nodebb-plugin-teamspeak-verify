@@ -28,6 +28,12 @@ plugin.sentMessage = function (tsid, msg) {
                 if (response === undefined) {
                     log.warn("Client not found");
                 } else {
+                    console.debug({
+                        rawResponse,
+                        response,
+                        msg,
+                        tsid
+                    });
                     cl.send("sendtextmessage", {
                         targetmode: 1,
                         target: response.clid,
@@ -308,7 +314,7 @@ plugin.addUserSettings = function (data, callback) {
         id: 'teamspeak-verify',
         route: 'teamspeak',
         name: 'Teamspeak ID',
-        icon: 'teamspeak',
+        icon: 'fa-teamspeak',
         visibility: {
             self: true,
             other: false,
