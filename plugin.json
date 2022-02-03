@@ -13,8 +13,8 @@
       "method": "init"
     },
     {
-      "hook": "filter:user.account.edit",
-      "method": "editAccount"
+      "hook": "filter:user.profileMenu",
+      "method": "addUserSettings"
     },
     {
       "hook": "action:user.banned",

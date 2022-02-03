@@ -303,10 +303,20 @@ plugin.addMenuItem = function (custom_header, callback) {
     callback(null, custom_header);
 };
 
-plugin.editAccount = function (data, callback) {
-    data.editButtons.push({
-        link: "/user/" + data.userslug + "/teamspeak",
-        text: "Teamspeak ID"
+plugin.addUserSettings = function (data, callback) {
+    data.links.push({
+        id: 'teamspeak-verify',
+        route: 'teamspeak',
+        name: 'Teamspeak ID',
+        icon: 'teamspeak',
+        visibility: {
+            self: true,
+            other: false,
+            moderator: false,
+            globalMod: false,
+            admin: false,
+            canViewInfo: false,
+        },
     });
 
     callback(null, data);
