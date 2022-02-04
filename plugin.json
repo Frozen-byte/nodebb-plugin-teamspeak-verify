@@ -13,6 +13,14 @@
       "method": "init"
     },
     {
+      "hook": "action:group.join",
+      "method": "userJoinedGroup"
+    },
+    {
+      "hook": "action:group.leave",
+      "method": "userLeftGroup"
+    },
+    {
       "hook": "filter:user.profileMenu",
       "method": "addUserSettings"
     },

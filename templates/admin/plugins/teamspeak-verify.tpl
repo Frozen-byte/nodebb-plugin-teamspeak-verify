@@ -39,14 +39,26 @@
             </div>
 
             <div class="form-group">
-                <label for="sgroupid">Server Group ID</label>
-                <input type="number" name="sgroupid" id="sgroupid" title="ServerGroupID" class="form-control" value="1"
-                       placeholder="1">
-            </div>
-
-            <div class="form-group">
                 <label for="customtext">Custom Text</label>
                 <textarea name="customtext" id="customtext" class="form-control"></textarea>
+            </div>
+
+            <hr/>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">nodeBB-Group - Teamspeak Group Mapping</div>
+                <div class="panel-body">
+                    <div class="row">
+                    {{{ each groups }}}
+                    <div class="col-sm-4 col-xs-12">
+                        <div class="form-group">
+                            <label for="sgroupid-{groups.slug}">{groups.name}</label>
+                            <input type="number" name="sgroupid-{groups.slug}" id="sgroupid-{groups.slug}" title="ServerGroupID" class="form-control"><br/>
+                        </div>
+                    </div>
+                    {{{ end }}}
+                    </div>
+                </div>
             </div>
         </form>
     </div>

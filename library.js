@@ -1,11 +1,12 @@
 "use strict";
-
 var user = require.main.require("./src/user"),
+    groups = require.main.require('./src/groups'),
     db = require.main.require('./src/database'),
     meta = require.main.require('./src/meta'),
     winston = require('winston'),
     TeamSpeakClient = require('node-teamspeak'),
-    middleware = require.main.require('./src/middleware');
+    middleware = require.main.require('./src/middleware'),
+    slugify = require.main.require('./src/slugify');
 
 var plugin = {};
 
@@ -58,10 +59,15 @@ plugin.addClientToGroup = function (tsid, servergroup) {
                 if (response === undefined) {
                     log.warn("Client not found");
                 } else {
-                    cl.send("servergroupaddclient", {
-                        sgid: servergroup,
-                        cldbid: response.cldbid
-                    });
+                    if(!Array.isArray(servergroup)) {
+                        servergroup = [servergroup];
+                    }
+                    servergroup.forEach(() => {
+                        cl.send("servergroupaddclient", {
+                            sgid: servergroup,
+                            cldbid: response.cldbid
+                        });
+                    })
                 }
             });
         });
@@ -78,27 +84,39 @@ plugin.removeClientFromGroup = function (tsid, servergroup) {
                 if (response === undefined) {
                     log.warn("Client not found");
                 } else {
-                    cl.send("servergroupdelclient", {
-                        sgid: servergroup,
-                        cldbid: response.cldbid
-                    });
+                    if(!Array.isArray(servergroup)) {
+                        servergroup = [servergroup];
+                    }
+                    servergroup.forEach(() => {
+                        cl.send("servergroupdelclient", {
+                            sgid: servergroup,
+                            cldbid: response.cldbid
+                        });
+                    })
                 }
             });
         });
-
         return true;
     } else {
         return false;
     }
 };
 
+// returns an array with all the Teamspeak IDs for the nodeBB Groups the User is in
+plugin.getUsersTsGroups = async function (uid, settings) {
+    let groupData = await groups.getUserGroups([uid]);
+    return groupData[0].map(userGroup => settings[`sgroupid-${userGroup.slug}`]).filter(tsGroup => !!tsGroup);
+}
+
 plugin.init = function (data, callback) {
     var hostMiddleware = data.middleware;
     var hostHelpers = require.main.require('./src/routes/helpers');
     var controllers = require('./static/lib/controllers');
 
-    function render(req, res, next) {
-        res.render('admin/plugins/teamspeak-verify', {});
+    async function render(req, res, next) {
+        res.render('admin/plugins/teamspeak-verify', {
+            groups: await groups.getGroupsBySort(),
+        });
     }
 
     plugin.connect(function () {
@@ -165,11 +183,18 @@ plugin.init = function (data, callback) {
 
             meta.settings.get('teamspeak-verify', function (err, settings) {
                 if (req.body.uid in tsTmpData && tsTmpData[req.body.uid].tsid === req.body.tsid && tsTmpData[req.body.uid].random === req.body.code) {
-                    plugin.getTSIDs(function (err, data) {
+                    plugin.getTSIDs(async function (err, data) {
                         if (data.indexOf(req.body.tsid) >= 0) {
                             res.json({error: true, info: "TS ID already verified"});
                         } else {
-                            if (settings["sgroupid"] && plugin.addClientToGroup(req.body.tsid, parseInt(settings["sgroupid"]))) {
+                            if (settings["sgroupid"]) {
+                                if (err) {
+                                    log.warn(err);
+                                    res.json({error: true, info: "internal server error"});
+                                }
+                                let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings)
+                                plugin.addClientToGroup(req.body.tsid, tsGroups);
+
                                 delete tsTmpData[req.body.uid];
                                 res.json({error: false, info: "success"});
                                 db.setObjectField('teamspeak-verify:uid:tid', req.body.uid, req.body.tsid, function (err) {
@@ -192,7 +217,7 @@ plugin.init = function (data, callback) {
     });
 
     data.router.get('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
-        res.json({error: true, info: "incorrect methode"});
+        res.json({error: true, info: "incorrect method"});
     });
 
     data.router.post('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
@@ -214,7 +239,7 @@ plugin.init = function (data, callback) {
     });
 
     data.router.get('/api/plugins/teamspeak-verify/disassociate/:uid', middleware.ensureLoggedIn, function (req, res) {
-        res.json({error: true, info: "incorrect methode"});
+        res.json({error: true, info: "incorrect method"});
     });
 
     data.router.post('/api/plugins/teamspeak-verify/disassociate', middleware.ensureLoggedIn, function (req, res) {
@@ -230,12 +255,14 @@ plugin.init = function (data, callback) {
                         log.warn("" + req.body.uid + " not verified");
                         res.json({error: true, info: "internal server error"});
                     } else {
-                        plugin.get(req.body.uid, function (err, tsid) {
-                            if (settings["sgroupid"] && plugin.removeClientFromGroup(tsid, parseInt(settings["sgroupid"]))) {
+                        plugin.get(req.body.uid, async function (err, tsid) {
+                            if (settings["sgroupid"]) {
+                                let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings);
+                                plugin.removeClientFromGroup(tsid, tsGroups);
                                 res.json({error: false, info: "success"});
                                 plugin.delete(req.body.uid, function (err) {
                                     if (err == null) {
-                                        log.info("User " + req.body.uid + " disassociate - removed TS ID");
+                                        log.info("User " + req.body.uid + " disassociate - removed TS ID" + tsGroups);
                                     } else {
                                         log.warn("DB Error " + err);
                                     }
@@ -254,6 +281,24 @@ plugin.init = function (data, callback) {
     hostHelpers.setupPageRoute(data.router, '/user/:userslug/teamspeak', hostMiddleware, [hostMiddleware.canViewUsers, hostMiddleware.checkAccountPermissions], controllers.renderSettings);
     callback();
 };
+
+plugin.userJoinedGroup = async function (data) {
+    const settings = await meta.settings.get('teamspeak-verify');
+    const tsGroupIds = data.groupNames.map((groupName) => settings[`sgroupid-${slugify(groupName)}`]);
+    plugin.get(data.uid, function(err, tsid) {
+        console.debug({data, tsGroupIds, settings, tsid});
+        plugin.addClientToGroup(tsid, tsGroupIds);
+    })
+}
+
+plugin.userLeftGroup = async function (data) {
+    const settings = await meta.settings.get('teamspeak-verify');
+    const tsGroupIds = data.groupNames.map((groupName) => settings[`sgroupid-${slugify(groupName)}`]);
+    plugin.get(data.uid, function(err, tsid) {
+        console.debug({data, tsGroupIds, settings, tsid});
+        plugin.removeClientFromGroup(tsid, tsGroupIds);
+    })
+}
 
 plugin.connect = function (callback) {
     meta.settings.get('teamspeak-verify', function (err, settings) {
@@ -279,17 +324,7 @@ plugin.userBanned = function (data, callback) {
     meta.settings.get('teamspeak-verify', function (err, settings) {
         plugin.isVerified(data.uid, function (err, isVerified) {
             if (isVerified) {
-                plugin.get(data.uid, function (err, tsid) {
-                    if (settings["sgroupid"] && plugin.removeClientFromGroup(tsid, parseInt(settings["sgroupid"]))) {
-                        plugin.delete(data.uid, function (err) {
-                            if (err == null) {
-                                log.info("User " + data.uid + " banned - removed TS ID");
-                            } else {
-                                log.warn("DB Error " + err);
-                            }
-                        });
-                    }
-                });
+                //TODO: ban TS User
             }
         });
     });
@@ -316,8 +351,8 @@ plugin.addUserSettings = function (data, callback) {
     data.links.push({
         id: 'teamspeak-verify',
         route: 'teamspeak',
-        name: 'Teamspeak ID',
-        icon: 'fa-teamspeak',
+        name: 'Teamspeak',
+        icon: 'fa-microphone',
         visibility: {
             self: true,
             other: false,
