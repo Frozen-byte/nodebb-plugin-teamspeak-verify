@@ -284,7 +284,7 @@ plugin.init = function (data, callback) {
 
 plugin.userJoinedGroup = async function (data) {
     const settings = await meta.settings.get('teamspeak-verify');
-    const tsGroupIds = data.groupNames.map((groupName) => settings[`sgroupid-${slugify(groupName)}`]);
+    const tsGroupIds = data.groupNames.map((groupName) => settings[`sgroupid-${slugify(groupName)}`]).filter(Boolean);
     plugin.get(data.uid, function(err, tsid) {
         console.debug({data, tsGroupIds, settings, tsid});
         plugin.addClientToGroup(tsid, tsGroupIds);
@@ -293,7 +293,7 @@ plugin.userJoinedGroup = async function (data) {
 
 plugin.userLeftGroup = async function (data) {
     const settings = await meta.settings.get('teamspeak-verify');
-    const tsGroupIds = data.groupNames.map((groupName) => settings[`sgroupid-${slugify(groupName)}`]);
+    const tsGroupIds = data.groupNames.map((groupName) => settings[`sgroupid-${slugify(groupName)}`]).filter(Boolean);
     plugin.get(data.uid, function(err, tsid) {
         console.debug({data, tsGroupIds, settings, tsid});
         plugin.removeClientFromGroup(tsid, tsGroupIds);
