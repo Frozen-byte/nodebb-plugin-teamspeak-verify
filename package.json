@@ -1,6 +1,6 @@
 {
   "name": "nodebb-plugin-teamspeak-verify",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "NodeBB TeamSpeak User Verify",
   "main": "library.js",
   "keywords": [
@@ -33,10 +33,10 @@
   "license": "MIT",
   "readmeFilename": "README.md",
   "dependencies": {
-    "node-teamspeak": "^1.0.10",
-    "node-datetime": "^2.0.3"
+    "node-datetime": "^2.0.3",
+    "node-teamspeak": "^1.0.10"
   },
   "nbbpm": {
-    "compatibility": "^1.19.0"
+    "compatibility": "^2.0.0"
   }
 }

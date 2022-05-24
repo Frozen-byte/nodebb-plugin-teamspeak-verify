@@ -3,10 +3,10 @@ var user = require.main.require("./src/user"),
     groups = require.main.require('./src/groups'),
     db = require.main.require('./src/database'),
     meta = require.main.require('./src/meta'),
-    winston = require('winston'),
-    TeamSpeakClient = require('node-teamspeak'),
+    winston = require.main.require('winston'),
     middleware = require.main.require('./src/middleware'),
-    slugify = require.main.require('./src/slugify');
+    slugify = require.main.require('./src/slugify'),
+    routeHelpers = require.main.require('./src/routes/helpers');
 
 var plugin = {};
 
@@ -108,29 +108,30 @@ plugin.getUsersTsGroups = async function (uid, settings) {
     return groupData[0].map(userGroup => settings[`sgroupid-${userGroup.slug}`]).filter(tsGroup => !!tsGroup);
 }
 
-plugin.init = function (data, callback) {
-    var hostMiddleware = data.middleware;
-    var hostHelpers = require.main.require('./src/routes/helpers');
-    var controllers = require('./static/lib/controllers');
+plugin.init = async function ({middleware: hostMiddleware, router}) {
+    const controllers = await require('./static/lib/controllers');
 
-    async function render(req, res, next) {
+    const render =  async (req, res) => {
         res.render('admin/plugins/teamspeak-verify', {
             groups: await groups.getGroupsBySort(),
         });
+
+        return Promise.resolve();
     }
 
     plugin.connect(function () {
         log.info("client initialised");
     });
 
-    data.router.get('/admin/plugins/teamspeak-verify', data.middleware.admin.buildHeader, render);
-    data.router.get('/api/admin/plugins/teamspeak-verify', render);
+    routeHelpers.setupAdminPageRoute(router, '/admin/plugins/teamspeak-verify', hostMiddleware, [], render)
+    // router.get('/admin/plugins/teamspeak-verify', hostMiddleware.admin.buildHeader, render);
+    router.get('/api/admin/plugins/teamspeak-verify', render);
 
 
-    data.router.get('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
+    router.get('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
-    data.router.post('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
+    router.post('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -170,11 +171,11 @@ plugin.init = function (data, callback) {
         });
     });
 
-    data.router.get('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
+    router.get('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
 
-    data.router.post('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
+    router.post('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -216,11 +217,11 @@ plugin.init = function (data, callback) {
         });
     });
 
-    data.router.get('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
+    router.get('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect method"});
     });
 
-    data.router.post('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
+    router.post('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
         plugin.getTSIDs(function (err, data) {
             if (data.indexOf(req.body.tsid) >= 0) {
                 res.json({error: true, info: "TS ID already verified"});
@@ -238,11 +239,11 @@ plugin.init = function (data, callback) {
         });
     });
 
-    data.router.get('/api/plugins/teamspeak-verify/disassociate/:uid', middleware.ensureLoggedIn, function (req, res) {
+    router.get('/api/plugins/teamspeak-verify/disassociate/:uid', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect method"});
     });
 
-    data.router.post('/api/plugins/teamspeak-verify/disassociate', middleware.ensureLoggedIn, function (req, res) {
+    router.post('/api/plugins/teamspeak-verify/disassociate', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -278,8 +279,7 @@ plugin.init = function (data, callback) {
     });
 
 
-    hostHelpers.setupPageRoute(data.router, '/user/:userslug/teamspeak', hostMiddleware, [hostMiddleware.canViewUsers, hostMiddleware.checkAccountPermissions], controllers.renderSettings);
-    callback();
+    routeHelpers.setupPageRoute(router, '/user/:userslug/teamspeak', hostMiddleware, [hostMiddleware.canViewUsers, hostMiddleware.checkAccountPermissions], controllers.renderSettings);
 };
 
 plugin.userJoinedGroup = async function (data) {
@@ -303,7 +303,9 @@ plugin.userLeftGroup = async function (data) {
     })
 }
 
-plugin.connect = function (callback) {
+plugin.connect = async function (callback) {
+    const TeamSpeakClient = await import('node-teamspeak');
+
     meta.settings.get('teamspeak-verify', function (err, settings) {
         if (cl && cl.send && typeof cl.send === "function") {
             try {
@@ -340,14 +342,14 @@ plugin.updateTitle = function (data, callback) {
     callback(null, data);
 };
 
-plugin.addMenuItem = function (custom_header, callback) {
+plugin.addMenuItem = (custom_header) => {
     custom_header.plugins.push({
         'route': "/plugins/teamspeak-verify",
         'icon': "fa-microphone",
         'name': "Teamspeak"
     });
 
-    callback(null, custom_header);
+    return custom_header
 };
 
 plugin.addUserSettings = function (data, callback) {
