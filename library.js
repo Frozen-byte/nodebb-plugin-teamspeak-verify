@@ -187,26 +187,22 @@ plugin.init = function (data, callback) {
                         if (data.indexOf(req.body.tsid) >= 0) {
                             res.json({error: true, info: "TS ID already verified"});
                         } else {
-                            if (settings["sgroupid"]) {
-                                if (err) {
-                                    log.warn(err);
-                                    res.json({error: true, info: "internal server error"});
-                                }
-                                let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings)
-                                plugin.addClientToGroup(req.body.tsid, tsGroups);
-
-                                delete tsTmpData[req.body.uid];
-                                res.json({error: false, info: "success"});
-                                db.setObjectField('teamspeak-verify:uid:tid', req.body.uid, req.body.tsid, function (err) {
-                                    if (err == null) {
-                                        log.info(`User ${req.body.uid} now associated with ${req.body.tsid}`);
-                                    } else {
-                                        log.warn(`DB Error ${err}`);
-                                    }
-                                });
-                            } else {
+                            if (err) {
+                                log.warn(err);
                                 res.json({error: true, info: "internal server error"});
                             }
+                            let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings)
+                            plugin.addClientToGroup(req.body.tsid, tsGroups);
+
+                            delete tsTmpData[req.body.uid];
+                            res.json({error: false, info: "success"});
+                            db.setObjectField('teamspeak-verify:uid:tid', req.body.uid, req.body.tsid, function (err) {
+                                if (err == null) {
+                                    log.info(`User ${req.body.uid} now associated with ${req.body.tsid}`);
+                                } else {
+                                    log.warn(`DB Error ${err}`);
+                                }
+                            });
                         }
                     });
                 } else {
@@ -258,20 +254,16 @@ plugin.init = function (data, callback) {
                         res.json({error: true, info: "internal server error"});
                     } else {
                         plugin.get(req.body.uid, async function (err, tsid) {
-                            if (settings["sgroupid"]) {
-                                let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings);
-                                plugin.removeClientFromGroup(tsid, tsGroups);
-                                res.json({error: false, info: "success"});
-                                plugin.delete(req.body.uid, function (err) {
-                                    if (err == null) {
-                                        log.info("User " + req.body.uid + " disassociate - removed TS ID" + tsGroups);
-                                    } else {
-                                        log.warn("DB Error " + err);
-                                    }
-                                });
-                            } else {
-                                res.json({error: true, info: "internal server error"});
-                            }
+                            let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings);
+                            plugin.removeClientFromGroup(tsid, tsGroups);
+                            res.json({error: false, info: "success"});
+                            plugin.delete(req.body.uid, function (err) {
+                                if (err == null) {
+                                    log.info("User " + req.body.uid + " disassociate - removed TS ID" + tsGroups);
+                                } else {
+                                    log.warn("DB Error " + err);
+                                }
+                            });
                         });
                     }
                 });
