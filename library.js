@@ -53,7 +53,7 @@ plugin.sentMessage = function (tsid, msg) {
 };
 
 plugin.addClientToGroup = function (tsid, servergroup) {
-    if (cl !== undefined || !tsid || !servergroup) {
+    if (cl && tsid && servergroup) {
         plugin.connect(function () {
             cl.send("clientgetdbidfromuid", {cluid: tsid}, function (err, response, rawResponse) {
                 if (response === undefined) {
@@ -78,7 +78,7 @@ plugin.addClientToGroup = function (tsid, servergroup) {
 };
 
 plugin.removeClientFromGroup = function (tsid, servergroup) {
-    if (cl !== undefined || !tsid || !servergroup) {
+    if (cl && tsid && servergroup) {
         plugin.connect(function () {
             cl.send("clientgetdbidfromuid", {cluid: tsid}, function (err, response, rawResponse) {
                 if (response === undefined) {
