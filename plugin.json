@@ -3,6 +3,7 @@
   "name": "NodeBB TeamSpeak User Verify",
   "description": "NodeBB Plugin that allows users to verify their TeamSpeak ID.",
   "url": "https://github.com/Gurkengewuerz/nodebb-plugin-teamspeak-verify",
+  "library": "./library.js",
   "hooks": [
     {
       "hook": "filter:admin.header.build",
@@ -33,11 +34,15 @@
       "method": "updateTitle"
     }
   ],
-  "templates": "./templates",
+  "staticDirs": {
+      "static": "./static"
+  },
   "acpScripts": [
     "static/lib/admin.js"
   ],
-  "scripts": [
-    "static/lib/settings.js"
-  ]
+  "templates": "./templates",
+  "modules": {
+    "../admin/plugins/teamspeak-verify.js": "./static/lib/admin.js",
+    "../client/account/teamspeak.js": "./static/lib/teamspeak.js"
+  }
 }

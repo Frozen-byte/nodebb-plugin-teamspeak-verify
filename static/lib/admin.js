@@ -1,5 +1,6 @@
+'use strict';
+
 define('admin/plugins/teamspeak-verify', ['settings'], function (Settings) {
-    'use strict';
     /* globals $, app, socket, require */
 
     var ACP = {};

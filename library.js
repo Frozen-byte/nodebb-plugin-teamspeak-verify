@@ -109,7 +109,6 @@ plugin.getUsersTsGroups = async function (uid, settings) {
 }
 
 plugin.init = function (data, callback) {
-    var hostMiddleware = data.middleware;
     var hostHelpers = require.main.require('./src/routes/helpers');
     var controllers = require('./static/lib/controllers');
 
@@ -123,7 +122,8 @@ plugin.init = function (data, callback) {
         log.info("client initialised");
     });
 
-    data.router.get('/admin/plugins/teamspeak-verify', data.middleware.admin.buildHeader, render);
+    hostHelpers.setupAdminPageRoute(data.router, '/admin/plugins/teamspeak-verify', [], render);
+
     data.router.get('/api/admin/plugins/teamspeak-verify', render);
 
 
@@ -199,9 +199,9 @@ plugin.init = function (data, callback) {
                                 res.json({error: false, info: "success"});
                                 db.setObjectField('teamspeak-verify:uid:tid', req.body.uid, req.body.tsid, function (err) {
                                     if (err == null) {
-                                        log.info("User " + req.body.uid + " now associated with " + req.body.tsid);
+                                        log.info(`User ${req.body.uid} now associated with ${req.body.tsid}`);
                                     } else {
-                                        log.warn("DB Error " + err);
+                                        log.warn(`DB Error ${err}`);
                                     }
                                 });
                             } else {
@@ -222,7 +222,9 @@ plugin.init = function (data, callback) {
 
     data.router.post('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
         plugin.getTSIDs(function (err, data) {
-            if (data.indexOf(req.body.tsid) >= 0) {
+            if (err) {
+                log.warn(`checkUser err ${err}`);
+            } else if (data.indexOf(req.body.tsid) !== -1) {
                 res.json({error: true, info: "TS ID already verified"});
             } else {
                 plugin.connect(function () {
@@ -277,8 +279,10 @@ plugin.init = function (data, callback) {
         });
     });
 
+    hostHelpers.setupPageRoute(data.router, '/user/:userslug/teamspeak', [(req, res, next) => {
+        setImmediate(next);
+    }], controllers.renderSettings);
 
-    hostHelpers.setupPageRoute(data.router, '/user/:userslug/teamspeak', hostMiddleware, [hostMiddleware.canViewUsers, hostMiddleware.checkAccountPermissions], controllers.renderSettings);
     callback();
 };
 
@@ -313,12 +317,16 @@ plugin.connect = function (callback) {
             }
         }
 
-        if (!err && settings["server"] && settings["port"] && settings["username"] && settings["password"] && settings["serid"] && settings["queryname"] && settings["sgroupid"]) {
+        if (err) {
+            log.warn(`plugin.connect settings errored ${err}`);
+        } else if (settings["server"] && settings["port"] && settings["username"] && settings["password"] && settings["serid"] && settings["queryname"]) {
             cl = new TeamSpeakClient(settings["server"], parseInt(settings["port"]));
             cl.send("login", {client_login_name: settings["username"], client_login_password: settings["password"]});
             cl.send("use", {sid: parseInt(settings["serid"])});
             cl.send("clientupdate", {client_nickname: settings["queryname"]});
             callback();
+        } else {
+            log.warn(`plugin.connect could not find server data from settings`);
         }
     });
 };
