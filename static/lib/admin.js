@@ -1,6 +1,6 @@
 'use strict';
 
-define('admin/plugins/teamspeak-verify', ['settings', 'alerts'], function (Settings, Alerts) {
+define('admin/plugins/teamspeak-verify', ['settings'], function (Settings) {
     /* globals $, app, socket, require */
 
     var ACP = {};
@@ -10,7 +10,7 @@ define('admin/plugins/teamspeak-verify', ['settings', 'alerts'], function (Setti
 
         $('#save').on('click', function () {
             Settings.save('teamspeak-verify', $('.teamspeak-verify-settings'), function () {
-                Alerts.alert({
+                app.alert({
                     type: 'success',
                     alert_id: 'teamspeak-verify-saved',
                     title: 'Settings Saved',

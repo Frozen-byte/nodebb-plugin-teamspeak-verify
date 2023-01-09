@@ -1,9 +1,6 @@
 'use strict';
 
 var parent = module.parent.exports,
-    passport = require.main.require('passport'),
-    nconf = require.main.require('nconf'),
-    async = require.main.require('async'),
     Controllers = {};
 
 Controllers.renderSettings = function(req, res, next) {

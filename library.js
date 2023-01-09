@@ -3,10 +3,10 @@ var user = require.main.require("./src/user"),
     groups = require.main.require('./src/groups'),
     db = require.main.require('./src/database'),
     meta = require.main.require('./src/meta'),
-    winston = require.main.require('winston'),
+    winston = require('winston'),
+    TeamSpeakClient = require('node-teamspeak'),
     middleware = require.main.require('./src/middleware'),
-    slugify = require.main.require('./src/slugify'),
-    routeHelpers = require.main.require('./src/routes/helpers');
+    slugify = require.main.require('./src/slugify');
 
 var plugin = {};
 
@@ -53,7 +53,7 @@ plugin.sentMessage = function (tsid, msg) {
 };
 
 plugin.addClientToGroup = function (tsid, servergroup) {
-    if (cl !== undefined) {
+    if (cl && tsid && servergroup) {
         plugin.connect(function () {
             cl.send("clientgetdbidfromuid", {cluid: tsid}, function (err, response, rawResponse) {
                 if (response === undefined) {
@@ -78,7 +78,7 @@ plugin.addClientToGroup = function (tsid, servergroup) {
 };
 
 plugin.removeClientFromGroup = function (tsid, servergroup) {
-    if (cl !== undefined) {
+    if (cl && tsid && servergroup) {
         plugin.connect(function () {
             cl.send("clientgetdbidfromuid", {cluid: tsid}, function (err, response, rawResponse) {
                 if (response === undefined) {
@@ -108,30 +108,29 @@ plugin.getUsersTsGroups = async function (uid, settings) {
     return groupData[0].map(userGroup => settings[`sgroupid-${userGroup.slug}`]).filter(tsGroup => !!tsGroup);
 }
 
-plugin.init = async function ({middleware: hostMiddleware, router}) {
-    const controllers = await require('./static/lib/controllers');
+plugin.init = function (data, callback) {
+    var hostHelpers = require.main.require('./src/routes/helpers');
+    var controllers = require('./static/lib/controllers');
 
-    const render =  async (req, res) => {
+    async function render(req, res, next) {
         res.render('admin/plugins/teamspeak-verify', {
             groups: await groups.getGroupsBySort(),
         });
-
-        return Promise.resolve();
     }
 
     plugin.connect(function () {
         log.info("client initialised");
     });
 
-    routeHelpers.setupAdminPageRoute(router, '/admin/plugins/teamspeak-verify', hostMiddleware, [], render)
-    // router.get('/admin/plugins/teamspeak-verify', hostMiddleware.admin.buildHeader, render);
-    router.get('/api/admin/plugins/teamspeak-verify', render);
+    hostHelpers.setupAdminPageRoute(data.router, '/admin/plugins/teamspeak-verify', [], render);
+
+    data.router.get('/api/admin/plugins/teamspeak-verify', render);
 
 
-    router.get('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
-    router.post('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/generate', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -171,11 +170,11 @@ plugin.init = async function ({middleware: hostMiddleware, router}) {
         });
     });
 
-    router.get('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect methode"});
     });
 
-    router.post('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/check', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -188,26 +187,22 @@ plugin.init = async function ({middleware: hostMiddleware, router}) {
                         if (data.indexOf(req.body.tsid) >= 0) {
                             res.json({error: true, info: "TS ID already verified"});
                         } else {
-                            if (settings["sgroupid"]) {
-                                if (err) {
-                                    log.warn(err);
-                                    res.json({error: true, info: "internal server error"});
-                                }
-                                let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings)
-                                plugin.addClientToGroup(req.body.tsid, tsGroups);
-
-                                delete tsTmpData[req.body.uid];
-                                res.json({error: false, info: "success"});
-                                db.setObjectField('teamspeak-verify:uid:tid', req.body.uid, req.body.tsid, function (err) {
-                                    if (err == null) {
-                                        log.info("User " + req.body.uid + " now associated with " + req.body.tsid);
-                                    } else {
-                                        log.warn("DB Error " + err);
-                                    }
-                                });
-                            } else {
+                            if (err) {
+                                log.warn(err);
                                 res.json({error: true, info: "internal server error"});
                             }
+                            let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings)
+                            plugin.addClientToGroup(req.body.tsid, tsGroups);
+
+                            delete tsTmpData[req.body.uid];
+                            res.json({error: false, info: "success"});
+                            db.setObjectField('teamspeak-verify:uid:tid', req.body.uid, req.body.tsid, function (err) {
+                                if (err == null) {
+                                    log.info(`User ${req.body.uid} now associated with ${req.body.tsid}`);
+                                } else {
+                                    log.warn(`DB Error ${err}`);
+                                }
+                            });
                         }
                     });
                 } else {
@@ -217,13 +212,15 @@ plugin.init = async function ({middleware: hostMiddleware, router}) {
         });
     });
 
-    router.get('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect method"});
     });
 
-    router.post('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/checkUser', middleware.ensureLoggedIn, function (req, res) {
         plugin.getTSIDs(function (err, data) {
-            if (data.indexOf(req.body.tsid) >= 0) {
+            if (err) {
+                log.warn(`checkUser err ${err}`);
+            } else if (data.indexOf(req.body.tsid) !== -1) {
                 res.json({error: true, info: "TS ID already verified"});
             } else {
                 plugin.connect(function () {
@@ -239,11 +236,11 @@ plugin.init = async function ({middleware: hostMiddleware, router}) {
         });
     });
 
-    router.get('/api/plugins/teamspeak-verify/disassociate/:uid', middleware.ensureLoggedIn, function (req, res) {
+    data.router.get('/api/plugins/teamspeak-verify/disassociate/:uid', middleware.ensureLoggedIn, function (req, res) {
         res.json({error: true, info: "incorrect method"});
     });
 
-    router.post('/api/plugins/teamspeak-verify/disassociate', middleware.ensureLoggedIn, function (req, res) {
+    data.router.post('/api/plugins/teamspeak-verify/disassociate', middleware.ensureLoggedIn, function (req, res) {
         user.isAdminOrGlobalMod(req.session.passport.user, function (err, isAdminorMod) {
             if (isAdminorMod !== true && req.session.passport.user != req.body.uid) {
                 res.json({error: true, info: "invalid user"});
@@ -257,20 +254,16 @@ plugin.init = async function ({middleware: hostMiddleware, router}) {
                         res.json({error: true, info: "internal server error"});
                     } else {
                         plugin.get(req.body.uid, async function (err, tsid) {
-                            if (settings["sgroupid"]) {
-                                let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings);
-                                plugin.removeClientFromGroup(tsid, tsGroups);
-                                res.json({error: false, info: "success"});
-                                plugin.delete(req.body.uid, function (err) {
-                                    if (err == null) {
-                                        log.info("User " + req.body.uid + " disassociate - removed TS ID" + tsGroups);
-                                    } else {
-                                        log.warn("DB Error " + err);
-                                    }
-                                });
-                            } else {
-                                res.json({error: true, info: "internal server error"});
-                            }
+                            let tsGroups = await plugin.getUsersTsGroups(req.body.uid, settings);
+                            plugin.removeClientFromGroup(tsid, tsGroups);
+                            res.json({error: false, info: "success"});
+                            plugin.delete(req.body.uid, function (err) {
+                                if (err == null) {
+                                    log.info("User " + req.body.uid + " disassociate - removed TS ID" + tsGroups);
+                                } else {
+                                    log.warn("DB Error " + err);
+                                }
+                            });
                         });
                     }
                 });
@@ -278,8 +271,11 @@ plugin.init = async function ({middleware: hostMiddleware, router}) {
         });
     });
 
+    hostHelpers.setupPageRoute(data.router, '/user/:userslug/teamspeak', [(req, res, next) => {
+        setImmediate(next);
+    }], controllers.renderSettings);
 
-    routeHelpers.setupPageRoute(router, '/user/:userslug/teamspeak', hostMiddleware, [hostMiddleware.canViewUsers, hostMiddleware.checkAccountPermissions], controllers.renderSettings);
+    callback();
 };
 
 plugin.userJoinedGroup = async function (data) {
@@ -303,9 +299,7 @@ plugin.userLeftGroup = async function (data) {
     })
 }
 
-plugin.connect = async function (callback) {
-    const TeamSpeakClient = await import('node-teamspeak');
-
+plugin.connect = function (callback) {
     meta.settings.get('teamspeak-verify', function (err, settings) {
         if (cl && cl.send && typeof cl.send === "function") {
             try {
@@ -315,12 +309,16 @@ plugin.connect = async function (callback) {
             }
         }
 
-        if (!err && settings["server"] && settings["port"] && settings["username"] && settings["password"] && settings["serid"] && settings["queryname"] && settings["sgroupid"]) {
+        if (err) {
+            log.warn(`plugin.connect settings errored ${err}`);
+        } else if (settings["server"] && settings["port"] && settings["username"] && settings["password"] && settings["serid"] && settings["queryname"]) {
             cl = new TeamSpeakClient(settings["server"], parseInt(settings["port"]));
             cl.send("login", {client_login_name: settings["username"], client_login_password: settings["password"]});
             cl.send("use", {sid: parseInt(settings["serid"])});
             cl.send("clientupdate", {client_nickname: settings["queryname"]});
             callback();
+        } else {
+            log.warn(`plugin.connect could not find server data from settings`);
         }
     });
 };
@@ -342,14 +340,14 @@ plugin.updateTitle = function (data, callback) {
     callback(null, data);
 };
 
-plugin.addMenuItem = (custom_header) => {
+plugin.addMenuItem = function (custom_header, callback) {
     custom_header.plugins.push({
         'route': "/plugins/teamspeak-verify",
         'icon': "fa-microphone",
         'name': "Teamspeak"
     });
 
-    return custom_header
+    callback(null, custom_header);
 };
 
 plugin.addUserSettings = function (data, callback) {

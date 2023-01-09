@@ -1,19 +1,20 @@
-define('forum/account/teamspeak', ['translator'], function (translator) {
+'use strict';
+
+define('forum/account/teamspeak', function () {
     var Settings = {};
 
     Settings.init = function () {
-        if (ajaxify.data.showSetup) {
-            $('button[data-action="verify"]').on('click', Settings.beginSetup);
-            $('button[data-action="checkNow"]').on('click', Settings.endSetup);
-        } else {
-            $('button[data-action="reverify"]').on('click', Settings.disassociate);
-        }
+        $('button[data-action="verify"]').on('click', Settings.beginSetup);
+        $('button[data-action="checkNow"]').on('click', Settings.endSetup);
+        $('button[data-action="reverify"]').on('click', Settings.disassociate);
         $("#notFound").hide();
     };
 
     Settings.beginSetup = function () {
-        if ($("#tsid").val().trim().length === 0) return;
-
+        if ($("#tsid").val().trim().length === 0) {
+            app.alertError("Bitte gib deine TeamSpeak UID ein.");
+            return;
+        }
         if(!(app.user.email.trim().length !== 0 && app.user["email:confirmed"])) {
             app.alertError("Bitte setzte/bestätige vorher deine Email.");
             return;
@@ -26,7 +27,6 @@ define('forum/account/teamspeak', ['translator'], function (translator) {
             }
         }).done(function (data) {
             if (data.error === true) {
-                found = false;
                 if(data.info === "TS ID already verified") {
                     app.alertError("Teamspeak ID wurde bereits verifiziert!");
                 } else {
